@@ -59,18 +59,72 @@ export function encryptStringSync(
 
 // Decryption --
 
+/**
+ * @deprecated
+ *
+ * Causes stack errors on large strings, use {@link parseCloakedString} instead.
+ */
 export const cloakedStringRegex =
   /^v1\.aesgcm256\.(?<fingerprint>[0-9a-fA-F]{8})\.(?<iv>[a-zA-Z0-9-_]{16})\.(?<ciphertext>[a-zA-Z0-9-_]{22,})={0,2}$/
+
+/**
+ * Tests if the input string consists only of URL-safe Base64 chars
+ * (e.g. using `-` and `=` instead of `+` and `/`), and is padded with `=`.
+ *
+ * @returns `true` if the string is a valid URL-safe Base64, else `false`.
+ *
+ * Adapted from <https://github.com/validatorjs/validator.js/blob/ebcca98232399b8404ca6b0ec842ab4596329d58/validator.js#L836-L845>
+ * @license MIT
+ * @copyright Copyright (c) 2016 Chris O'Hara <cohara87@gmail.com>
+ */
+function isBase64(str: string) {
+  const len = str.length
+  if (len % 4 === 0 && !/(^[a-z0-9-_=])/i.test(str)) {
+    return false
+  }
+  const firstPaddingChar = str.indexOf('=')
+  return (
+    firstPaddingChar === -1 ||
+    firstPaddingChar === len - 1 ||
+    (firstPaddingChar === len - 2 && str[len - 1] === '=')
+  )
+}
+
+export function parseCloakedString(input: CloakedString) {
+  const [version, algorithm, fingerprint, iv, ciphertext, nothing] =
+    input.split('.')
+
+  const isCloakedString =
+    version === 'v1' &&
+    algorithm === 'aesgcm256' &&
+    /^[0-9a-f]{8}$/i.test(fingerprint) &&
+    /^[a-zA-Z0-9-_]{16}$/.test(iv) &&
+    isBase64(ciphertext) &&
+    ciphertext.length >= 24 &&
+    nothing === undefined
+
+  if (isCloakedString === false) {
+    return false
+  } else {
+    return {
+      groups: {
+        fingerprint,
+        iv,
+        ciphertext
+      }
+    }
+  }
+}
 
 export async function decryptString(
   input: CloakedString,
   key: CloakKey | ParsedCloakKey
 ): Promise<string> {
-  const match = input.match(cloakedStringRegex)
+  const match = parseCloakedString(input)
   if (!match) {
     throw new Error(`Unknown message format: ${input}`)
   }
-  const iv = match.groups!.iv
+  const iv = match.groups.iv
   const ciphertext = match.groups!.ciphertext
   let aesKey: CryptoKey | Uint8Array
   if (typeof key === 'string') {
@@ -88,11 +142,11 @@ export function decryptStringSync(
   input: CloakedString,
   key: CloakKey | ParsedCloakKey
 ): string {
-  const match = input.match(cloakedStringRegex)
+  const match = parseCloakedString(input)
   if (!match) {
     throw new Error(`Unknown message format: ${input}`)
   }
-  const iv = match.groups!.iv
+  const iv = match.groups.iv
   const ciphertext = match.groups!.ciphertext
   let aesKey: CryptoKey | Uint8Array
   if (typeof key === 'string') {
@@ -107,9 +161,9 @@ export function decryptStringSync(
 }
 
 export function getMessageKeyFingerprint(message: CloakedString) {
-  const match = message.match(cloakedStringRegex)
+  const match = parseCloakedString(message)
   if (!match) {
     throw new Error('Unknown message format')
   }
-  return match.groups!.fingerprint
+  return match.groups.fingerprint
 }

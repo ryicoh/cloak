@@ -23,6 +23,14 @@ describe('v1 format', () => {
     expect(received).toEqual(expected)
   })
 
+  test('Encrypt / decript 4 MiB string', async () => {
+    const key = 'k1.aesgcm256.2itF7YmMYIP4b9NNtKMhIx2axGi6aI50RcwGBiFq-VA='
+    const expected = 'a'.repeat(4_194_304) // 2 ** 22 = 4 MiB
+    const cipher = await encryptString(expected, key)
+    const received = await decryptString(cipher, key)
+    expect(received).toEqual(expected)
+  })
+
   test('Encrypt empty string', async () => {
     const key = 'k1.aesgcm256.2itF7YmMYIP4b9NNtKMhIx2axGi6aI50RcwGBiFq-VA='
     const expected = ''
